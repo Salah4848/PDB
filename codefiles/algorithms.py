@@ -1,6 +1,6 @@
 import numpy as np
 
-def estimate_graphon_signal(X,A):
+def estimate_graphon_signal(A,X):
     '''
     Returns estimates of the probabiliti matrix theta and the mean vector mu
     inputs:
