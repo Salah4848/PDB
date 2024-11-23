@@ -67,7 +67,8 @@ def align_graphon(theta_hat, true_graphon):
     
     #Apply the inverse permutation to the sorted estimate
     aligned_flat = np.zeros_like(theta_hat_flat)
-    aligned_flat[inverse_permutation] = theta_hat_flat[estimated_sort_indices]
+    aligned_flat = theta_hat_flat[estimated_sort_indices]
+    aligned_flat = aligned_flat[inverse_permutation]
     
     #Reconstruct the aligned graphon matrix
     aligned_graphon = np.zeros_like(theta_hat)
@@ -95,7 +96,8 @@ def align_signal(mu_hat, true_signal):
     
     #Apply the inverse permutation to the sorted estimate
     aligned = np.zeros_like(mu_hat)
-    aligned[inverse_permutation] = mu_hat[estimated_sort_indices]
+    aligned = mu_hat[estimated_sort_indices]
+    aligned = aligned[inverse_permutation]
 
     
     return aligned

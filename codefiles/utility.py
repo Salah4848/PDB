@@ -46,7 +46,7 @@ def visualize(graphon, signal, est_graphon, est_signal, n_points=100):
     t = np.linspace(0,1,n_points)
     f = signal(t)
     tstep = np.linspace(0,1,len(est_signal)+1)
-    est_signal=np.append(est_signal,[0])
+    est_signal=np.append(est_signal,[est_signal[-1]])
 
     plt.figure(figsize=(12, 6))
 
@@ -111,7 +111,6 @@ def blockify_graphon(graphon, n):
     u, v = np.meshgrid(x, y)
     graphon_matrix = graphon(u,v)
     return graphon_matrix
-
     
 def blockify_signal(signal,n):
     '''

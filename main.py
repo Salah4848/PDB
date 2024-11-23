@@ -1,9 +1,9 @@
 from codefiles import *
 
-n=40
+n=100
 
-f = lambda x : np.cos(10*x)
-w = lambda x,y : (x+y)/2
+f = lambda x : 10*x*x
+w = lambda x,y : np.cos(10*(x+y))
 
 A,X = sample_from_graphon_signal(w,f,n)
 
