@@ -51,7 +51,7 @@ def visualize(graphon, signal, est_graphon, est_signal, n_points=100):
     plt.figure(figsize=(12, 6))
 
     plt.subplot(2, 2, 1)
-    plt.title("Estimated Graphon (Theta Hat)")
+    plt.title("Estimated Graphon (theta Hat)")
     plt.imshow(est_graphon, cmap='viridis')
     plt.colorbar()
 
@@ -61,7 +61,7 @@ def visualize(graphon, signal, est_graphon, est_signal, n_points=100):
     plt.colorbar()
 
     plt.subplot(2, 2, 3)
-    plt.title("Estimated Signal")
+    plt.title("Estimated Signal (mu_hat)")
     plt.plot(tstep, est_signal, drawstyle='steps-post')
 
     plt.subplot(2, 2, 4)
