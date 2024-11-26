@@ -21,8 +21,9 @@ def estimate_graphon_signal(A,X):
             df[i,j] = abs(np.max((X[i]-X[j])*temp2))
             dg[j,i] = dg[i,j] 
             df[j,i] = dg[i,j]
-        
-    d = dg + df #should add a lambda param here maybe
+    
+    lamb = 1
+    d = dg + lamb*df
     h = int(np.ceil(np.sqrt(np.log(n) / n)))  #neighborhood size parameter
     theta_hat = np.zeros_like(A)
     mu_hat = np.zeros_like(X)
@@ -101,4 +102,3 @@ def align_signal(mu_hat, true_signal):
 
     
     return aligned
-
