@@ -2,8 +2,8 @@ from codefiles import *
 
 n=100
 
-f = lambda x : 10*np.cos(10*x)
-w = lambda x,y : (x+y)/2
+f = lambda x : 10*x*x
+w = lambda x,y : x*y
 
 A,X,theta,mu = sample_from_graphon_signal(w,f,n)
 

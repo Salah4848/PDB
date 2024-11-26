@@ -152,10 +152,10 @@ def benchmark_error(A, X, theta, mu, graphon, signal, graph_it=True):
         aligned_theta_hat = align_graphon(theta_hat, w_matrix)
         aligned_mu_hat = align_signal(mu_hat, f_matrix)
 
-        error_equiv_graphon[n-3] = squared_norm_matrix(aligned_theta_hat-w_matrix)
-        error_equiv_signal[n-3] = squared_norm_vector(aligned_mu_hat-f_matrix)
-        error_prob_matrix[n-3] = squared_norm_matrix(theta_hat-thetan)
-        error_mean_vector[n-3] = squared_norm_vector(mu_hat-mun)
+        error_equiv_graphon[n-3] = squared_norm_matrix(aligned_theta_hat-w_matrix)/(n*n)
+        error_equiv_signal[n-3] = squared_norm_vector(aligned_mu_hat-f_matrix)/n
+        error_prob_matrix[n-3] = squared_norm_matrix(theta_hat-thetan)/(n*n)
+        error_mean_vector[n-3] = squared_norm_vector(mu_hat-mun)/n
 
     if graph_it:
         t = np.arange(3,N)
