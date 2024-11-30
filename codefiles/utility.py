@@ -49,25 +49,26 @@ def visualize(graphon, signal, est_graphon, est_signal, n_points=100):
     tstep = np.linspace(0,1,len(est_signal)+1)
     est_signal=np.append(est_signal,[est_signal[-1]])
 
-    plt.figure(figsize=(12, 6))
+    plt.close()
+    plt.figure()
 
-    plt.subplot(2, 2, 1)
+    plt.subplot(223)
     plt.title("Estimated Graphon (theta Hat)")
     plt.imshow(est_graphon, cmap='viridis',vmin=0,vmax=1)
     plt.colorbar()
 
-    plt.subplot(2, 2, 2)
+    plt.subplot(224)
     plt.title("True Graphon")
     plt.imshow(w, cmap='viridis',vmin=0,vmax=1)
     plt.colorbar()
 
-    plt.subplot(2, 2, 3)
+    plt.subplot(211)
     plt.title("Estimated Signal (mu_hat)")
-    plt.plot(tstep, est_signal, drawstyle='steps-post')
+    plt.plot(tstep, est_signal, drawstyle='steps-post',label="estimate")
+    plt.plot(t,f, label="True")
+    plt.legend()
 
-    plt.subplot(2, 2, 4)
-    plt.title("True Signal")
-    plt.plot(t,f)
+    
 
 
     plt.tight_layout()

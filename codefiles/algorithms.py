@@ -19,25 +19,35 @@ def estimate_graphon_signal(A,X):
             temp2 = np.delete(X,[i,j],0)
             dg[i,j] = abs(np.max(np.dot(A[:,i]-A[:,j],temp1)))/n
             df[i,j] = abs(np.max((X[i]-X[j])*temp2))
-            dg[j,i] = dg[i,j] 
-            df[j,i] = dg[i,j]
+            dg[j,i] = dg[i,j]
+            df[j,i] = df[i,j]
+
     
     lamb = 1
+    c=1
     d = dg + lamb*df
-    h = int(np.ceil(np.sqrt(np.log(n) / n)))  #neighborhood size parameter
+    h =c*np.sqrt(np.log(n)/n)
+    hs= h/n
     theta_hat = np.zeros_like(A)
     mu_hat = np.zeros_like(X)
 
     for i in range(n):
-        #find neighbors
-        neighbors = np.argsort(d[i])[:h]
-
+        #find neighbors for graphon
+        temp = np.delete(d[i],i)
+        q = np.quantile(temp,h)
+        neighbors = np.where(temp<=q)
+        size = len(neighbors[0])
+        #find neighbors for signal
+        qs = np.quantile(temp,hs)
+        neighborsS = np.where(temp<=qs)
+        size = len(neighbors[0])
         #estimate mu_i
-        mu_hat[i] = np.sum(X[neighbors]) / len(neighbors)
-        for j in range(n):
+        mu_hat[i] = np.sum(X[neighborsS]) / len(neighborsS[0])
+        for j in range(i+1):
             #estimate theta_ij
-            theta_hat[i, j] = (np.sum(A[neighbors, j]) / len(neighbors) +
-                           np.sum(A[i, neighbors]) / len(neighbors)) / 2
+            theta_hat[i,j] = (np.sum(A[neighbors, j]) / size +
+                           np.sum(A[i, neighbors]) / size) / 2
+            theta_hat[j,i] =theta_hat[i,j]
 
     return (theta_hat,mu_hat)
 
@@ -55,7 +65,7 @@ def align_graphon(theta_hat, true_graphon):
     n = theta_hat.shape[0]
     
     #Extract the upper triangular part (excluding diagonal for symmetry)
-    triu_indices = np.triu_indices(n, k=1)
+    triu_indices = np.triu_indices(n, k=0)
     theta_hat_flat = theta_hat[triu_indices]
     true_graphon_flat = true_graphon[triu_indices]
     
@@ -74,7 +84,9 @@ def align_graphon(theta_hat, true_graphon):
     #Reconstruct the aligned graphon matrix
     aligned_graphon = np.zeros_like(theta_hat)
     aligned_graphon[triu_indices] = aligned_flat
-    aligned_graphon = aligned_graphon + aligned_graphon.T  #Symmetrize
+    temp = np.copy(aligned_graphon)
+    np.fill_diagonal(temp,0)
+    aligned_graphon = temp + aligned_graphon.T  #Symmetrize
     
     return aligned_graphon
 
