@@ -23,11 +23,10 @@ def estimate_graphon_signal(A,X):
             df[j,i] = df[i,j]
 
     
-    lamb = 1
+    lamb = 0
     c=1
     d = dg + lamb*df
-    h =c*np.sqrt(np.log(n)/n)
-    hs= h/n
+    h = c*np.sqrt(np.log(n)/n**2) #c*np.sqrt(np.log(n)/n)
     theta_hat = np.zeros_like(A)
     mu_hat = np.zeros_like(X)
 
@@ -37,12 +36,8 @@ def estimate_graphon_signal(A,X):
         q = np.quantile(temp,h)
         neighbors = np.where(temp<=q)
         size = len(neighbors[0])
-        #find neighbors for signal
-        qs = np.quantile(temp,hs)
-        neighborsS = np.where(temp<=qs)
-        size = len(neighbors[0])
         #estimate mu_i
-        mu_hat[i] = np.sum(X[neighborsS]) / len(neighborsS[0])
+        mu_hat[i] = X[i]#np.sum(X[neighbors]) / size
         for j in range(i+1):
             #estimate theta_ij
             theta_hat[i,j] = (np.sum(A[neighbors, j]) / size +
