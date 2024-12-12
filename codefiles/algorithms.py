@@ -1,8 +1,12 @@
 import numpy as np
+from scipy.spatial.distance import cdist
+from sklearn.cluster import KMeans
 
-def estimate_graphon_signal(A,X):
+
+
+def FANSbased(A,X):
     '''
-    Returns estimates of the probabiliti matrix theta and the mean vector mu
+    Uses FANS algorithm.
     inputs:
         X : 1xn array, obsrved signal data
         A : nxn array, observed adjacensy matrix
@@ -23,10 +27,10 @@ def estimate_graphon_signal(A,X):
             df[j,i] = df[i,j]
 
     
-    lamb = 0
+    lamb = 1
     c=1
     d = dg + lamb*df
-    h = c*np.sqrt(np.log(n)/n**2) #c*np.sqrt(np.log(n)/n)
+    h = c*np.sqrt(np.log(n)/n) #c*np.sqrt(np.log(n)/n)
     theta_hat = np.zeros_like(A)
     mu_hat = np.zeros_like(X)
 
@@ -37,7 +41,7 @@ def estimate_graphon_signal(A,X):
         neighbors = np.where(temp<=q)
         size = len(neighbors[0])
         #estimate mu_i
-        mu_hat[i] = X[i]#np.sum(X[neighbors]) / size
+        mu_hat[i] = np.sum(X[neighbors]) / size
         for j in range(i+1):
             #estimate theta_ij
             theta_hat[i,j] = (np.sum(A[neighbors, j]) / size +
@@ -45,6 +49,63 @@ def estimate_graphon_signal(A,X):
             theta_hat[j,i] =theta_hat[i,j]
 
     return (theta_hat,mu_hat)
+
+
+def EMbased(A, X, k, max_iter=100):
+    '''
+    An EM based method for blockmodels. https://stephens999.github.io/fiveMinuteStats/intro_to_em.html
+    inputs:
+        A: Adjacency matrix (n x n).
+        X: Node signals (n x 1).
+        k: Number of blocks.
+    outputs:
+        theta_hat,mu_hat
+    '''
+    n = A.shape[0]
+
+    #Use KMeans on X for initial block assignments
+    kmeans = KMeans(n_clusters=k, random_state=0).fit(X.reshape(-1, 1))
+    z_est = kmeans.labels_
+
+    #Initialize Q and M based on initial assignments
+    Q_est = np.zeros((k, k))
+    M_est = np.zeros(k)
+    
+    for a in range(k):
+        for b in range(k):
+            Q_est[a, b] = np.mean(A[np.ix_(z_est == a, z_est == b)])
+        M_est[a] = np.mean(X[z_est == a])
+
+
+    for iteration in range(max_iter):
+        #E-Step: Update block assignments
+        z_new = np.zeros(n, dtype=int)
+        for i in range(n):
+            scores = []
+            for a in range(k):
+                #Compute likelihood
+                signal_likelihood = -0.5 * ((X[i] - M_est[a])**2)
+                graphon_likelihood = 0# Find smthing to put here
+                scores.append(signal_likelihood + graphon_likelihood)
+            z_new[i] = np.argmax(scores)
+
+        #M-Step: Update Q and M
+        for a in range(k):
+            for b in range(k):
+                Q_est[a, b] = np.mean(A[np.ix_(z_new == a, z_new == b)])
+            M_est[a] = np.mean(X[z_new == a])
+
+        #Convergence check
+        if np.all(z_est == z_new):
+            break
+
+        z_est = z_new
+
+    mu_est = M_est[z_est]
+    z_mat = np.meshgrid(z_est, z_est)
+    theta_est = Q_est[z_mat] 
+    return theta_est, mu_est
+
 
 def align_graphon(theta_hat, true_graphon):
     """
@@ -84,6 +145,7 @@ def align_graphon(theta_hat, true_graphon):
     aligned_graphon = temp + aligned_graphon.T  #Symmetrize
     
     return aligned_graphon
+
 
 def align_signal(mu_hat, true_signal):
     '''

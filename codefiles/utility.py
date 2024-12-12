@@ -30,7 +30,7 @@ def simplify(matrix, k):
     
     return block_matrix
 
-def visualize(graphon, signal, est_graphon, est_signal, n_points=100):
+def visualize(graphon, signal, est_graphon, est_signal, n_points=200):
     '''
     Plots a nice 4x4 grid.
     inputs:
@@ -76,7 +76,7 @@ def visualize(graphon, signal, est_graphon, est_signal, n_points=100):
 
 def sample_from_graphon_signal(w, f, n, symmetric=True, self_loops=False):
     '''
-    Samples an nxn adjacency matrix from the graphon W and signal values from signal f with added standard gaussian noise.
+    Samples an nxn adjacency matrix from the graphon W and signal M from signal f with added standard gaussian noise.
     outputs:
         (A,X,theta,mu)
     '''
@@ -130,36 +130,37 @@ def squared_norm_matrix(M):
 def squared_norm_vector(v):
     return np.dot(v,v)
 
-def benchmark_error(A, X, theta, mu, graphon, signal, graph_it=True):
+def benchmark_error(A, X, theta, mu, graphon, signal,method, graph_it=True):
     '''
-    Graphs the error(s) against the amount of samples used. Used to check rates.
+    Graphs the error(s) against the amount of samples used. Used to check rates. min samplesize is 20
     '''
+    minn = 20
     N = len(X)
-    error_equiv_graphon = np.zeros(N-3)
-    error_equiv_signal = np.zeros(N-3)
-    error_prob_matrix = np.zeros(N-3)
-    error_mean_vector = np.zeros(N-3)
+    error_equiv_graphon = np.zeros(N-minn)
+    error_equiv_signal = np.zeros(N-minn)
+    error_prob_matrix = np.zeros(N-minn)
+    error_mean_vector = np.zeros(N-minn)
 
-    for n in range(3,N):
+    for n in range(minn,N):
         Xn = X[:n]
         An = A[:n,:n]
         thetan = theta[:n,:n]
         mun = mu[:n]
 
-        theta_hat, mu_hat = estimate_graphon_signal(An, Xn)
+        theta_hat, mu_hat = method(An, Xn)
 
         w_matrix = blockify_graphon(graphon, n)
         f_matrix = blockify_signal(signal, n)
         aligned_theta_hat = align_graphon(theta_hat, w_matrix)
         aligned_mu_hat = align_signal(mu_hat, f_matrix)
 
-        error_equiv_graphon[n-3] = squared_norm_matrix(aligned_theta_hat-w_matrix)/(n*n)
-        error_equiv_signal[n-3] = squared_norm_vector(aligned_mu_hat-f_matrix)/n
-        error_prob_matrix[n-3] = squared_norm_matrix(theta_hat-thetan)/(n*n)
-        error_mean_vector[n-3] = squared_norm_vector(mu_hat-mun)/n
+        error_equiv_graphon[n-minn] = squared_norm_matrix(aligned_theta_hat-w_matrix)/(n*n)
+        error_equiv_signal[n-minn] = squared_norm_vector(aligned_mu_hat-f_matrix)/n
+        error_prob_matrix[n-minn] = squared_norm_matrix(theta_hat-thetan)/(n*n)
+        error_mean_vector[n-minn] = squared_norm_vector(mu_hat-mun)/n
 
     if graph_it:
-        t = np.arange(3,N)
+        t = np.arange(minn,N)
         
         plt.figure(figsize=(12, 6))
 
@@ -183,3 +184,84 @@ def benchmark_error(A, X, theta, mu, graphon, signal, graph_it=True):
         plt.tight_layout()
         plt.show()
 
+
+def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1)):
+    '''
+    Generates random step signal
+    '''
+
+    thresholds = np.sort(np.random.uniform(low=threshold_range[0], high=threshold_range[1], size=k-1))
+    
+    values = np.sort(np.random.uniform(low=value_range[0], high=value_range[1], size=k))
+    
+    def signal(x):
+
+        x = np.asarray(x)
+        result = np.empty_like(x, dtype=np.float64)
+        
+        x_regions = np.digitize(x, thresholds, right=False)
+        result = values[x_regions]
+
+        
+        return result
+    
+    return signal, thresholds, values
+
+def random_step_graphon(k, value_range=(0, 1), threshold_range=(0, 1)):
+    """
+    Generate a random step graphon.
+    
+    """
+    thresholds = np.sort(np.random.uniform(low=threshold_range[0], high=threshold_range[1], size=k-1))
+    
+    values = np.random.uniform(low=value_range[0], high=value_range[1], size=(k, k))
+    values = (values + values.T) / 2
+    
+    def graphon(x, y):
+
+        x = np.asarray(x)
+        y = np.asarray(y)
+        
+        x_regions = np.digitize(x, thresholds, right=False)
+        y_regions = np.digitize(y, thresholds, right=False)
+        
+        result = values[x_regions, y_regions]
+        return result
+    
+    return graphon, thresholds, values
+
+def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), threshold_range=(0, 1)):
+    """
+    Generate a random step graphon-signal.
+    
+    """
+    thresholds = np.sort(np.random.uniform(low=threshold_range[0], high=threshold_range[1], size=k-1))
+    
+    gvalues = np.random.uniform(low=graphon_range[0], high=graphon_range[1], size=(k, k))
+    gvalues = (gvalues + gvalues.T) / 2
+    
+    svalues = np.sort(np.random.uniform(low=signal_range[0], high=signal_range[1], size=k))
+
+    def graphon(x, y):
+
+        x = np.asarray(x)
+        y = np.asarray(y)
+        
+        x_regions = np.digitize(x, thresholds, right=False)
+        y_regions = np.digitize(y, thresholds, right=False)
+        
+        result = gvalues[x_regions, y_regions]
+        return result
+    
+    def signal(x):
+
+        x = np.asarray(x)
+        result = np.empty_like(x, dtype=np.float64)
+        
+        x_regions = np.digitize(x, thresholds, right=False)
+        result = svalues[x_regions]
+
+        
+        return result
+    
+    return graphon, signal
