@@ -185,14 +185,17 @@ def benchmark_error(A, X, theta, mu, graphon, signal,method, graph_it=True):
         plt.show()
 
 
-def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1)):
+def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1),sort=False):
     '''
     Generates random step signal
     '''
 
     thresholds = np.sort(np.random.uniform(low=threshold_range[0], high=threshold_range[1], size=k-1))
     
-    values = np.sort(np.random.uniform(low=value_range[0], high=value_range[1], size=k))
+    values = np.random.uniform(low=value_range[0], high=value_range[1], size=k)
+
+    if sort:
+        values = np.sort(values)
     
     def signal(x):
 
@@ -207,7 +210,7 @@ def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1)):
     
     return signal, thresholds, values
 
-def random_step_graphon(k, value_range=(0, 1), threshold_range=(0, 1)):
+def random_step_graphon(k, value_range=(0, 1), threshold_range=(0, 1),sort=False):
     """
     Generate a random step graphon.
     
@@ -216,6 +219,11 @@ def random_step_graphon(k, value_range=(0, 1), threshold_range=(0, 1)):
     
     values = np.random.uniform(low=value_range[0], high=value_range[1], size=(k, k))
     values = (values + values.T) / 2
+    if sort:
+        diag = np.diagonal(values)
+        perm = np.argsort(diag)
+        values = values[perm,:]
+        values = values[:,perm]
     
     def graphon(x, y):
 
@@ -230,7 +238,7 @@ def random_step_graphon(k, value_range=(0, 1), threshold_range=(0, 1)):
     
     return graphon, thresholds, values
 
-def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), threshold_range=(0, 1)):
+def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), threshold_range=(0, 1),aligned=False):
     """
     Generate a random step graphon-signal.
     
@@ -241,6 +249,15 @@ def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), th
     gvalues = (gvalues + gvalues.T) / 2
     
     svalues = np.sort(np.random.uniform(low=signal_range[0], high=signal_range[1], size=k))
+
+    if aligned:
+        diag = np.diagonal(gvalues)
+        perm = np.argsort(diag)
+        gvalues = gvalues[perm,:]
+        gvalues = gvalues[:,perm]
+
+        svalues= np.sort(svalues)
+
 
     def graphon(x, y):
 

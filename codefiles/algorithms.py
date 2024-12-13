@@ -50,8 +50,7 @@ def FANSbased(A,X):
 
     return (theta_hat,mu_hat)
 
-
-def EMbased(A, X, k, max_iter=100):
+def EMbased(A, X, k, max_iter=100,blockoutput=False):
     '''
     An EM based method for blockmodels. https://stephens999.github.io/fiveMinuteStats/intro_to_em.html
     inputs:
@@ -64,8 +63,17 @@ def EMbased(A, X, k, max_iter=100):
     n = A.shape[0]
 
     #Use KMeans on X for initial block assignments
-    kmeans = KMeans(n_clusters=k, random_state=0).fit(X.reshape(-1, 1))
-    z_est = kmeans.labels_
+    #kmeans = KMeans(n_clusters=k, random_state=0).fit(X.reshape(-1, 1))
+    #z_est = kmeans.labels_
+
+    #Start with random z
+    #z_est = np.random.randint(0, k, size=n)
+
+    #Start with balanced random z
+    z_est = np.array([i for i in range(k) for _ in range(n // (k))] + \
+            [i for i in range(n % (k))])
+    np.random.shuffle(z_est)
+    
 
     #Initialize Q and M based on initial assignments
     Q_est = np.zeros((k, k))
@@ -84,9 +92,9 @@ def EMbased(A, X, k, max_iter=100):
             scores = []
             for a in range(k):
                 #Compute likelihood
-                signal_likelihood = -0.5 * ((X[i] - M_est[a])**2)
-                graphon_likelihood = 0# Find smthing to put here
-                scores.append(signal_likelihood + graphon_likelihood)
+                signal_likelihood = np.exp(-0.5 * ((X[i] - M_est[a])**2))
+                graph_likelihood = np.prod([Q_est[a, z_est[j]] if A[i,j] else (1-Q_est[a, z_est[j]]) for j in range(n) if j!=i])
+                scores.append(signal_likelihood * graph_likelihood)
             z_new[i] = np.argmax(scores)
 
         #M-Step: Update Q and M
@@ -100,14 +108,23 @@ def EMbased(A, X, k, max_iter=100):
             break
 
         z_est = z_new
-
+    
+    if blockoutput:
+        maparr = np.argsort(M_est)
+        mapdic = {maparr[i]:i for i in range(len(maparr))}
+        z_block = np.array([mapdic[x] for x in z_est])
+        z_est = np.sort(z_block)
+        M_est = M_est[maparr]
+        Q_est = Q_est[maparr,:]
+        Q_est = Q_est[:,maparr]
+        
     mu_est = M_est[z_est]
     z_mat = np.meshgrid(z_est, z_est)
     theta_est = Q_est[z_mat] 
+    #np.fill_diagonal(theta_est,0)
     return theta_est, mu_est
 
-
-def align_graphon(theta_hat, true_graphon):
+def align_graphon(theta_hat, true_graphon, diagonly=False):
     """
     Align the estimated graphon to the true graphon. We use a sorting method : https://stackoverflow.com/questions/54041397/given-two-arrays-find-the-permutations-that-give-closest-distance-between-two-a
     Can feed it k-block versions of the matrices.
@@ -119,6 +136,22 @@ def align_graphon(theta_hat, true_graphon):
     - aligned_graphon: Aligned estimated graphon.
     """
     n = theta_hat.shape[0]
+
+    if diagonly:
+        #Extract diagonal
+        diaghat = np.diagonal(theta_hat)
+        diagtrue = np.diagonal(true_graphon)
+        #Get the increasing sorting for theta and its inverse for the graphon
+        maphat = np.argsort(diaghat)
+        inversemaptrue =np.argsort(np.argsort(diagtrue))
+        #First sort for increaing diag values
+        result = theta_hat[maphat,:]
+        result = result[:,maphat]
+        #Then apply the inverse sort of the true graphon
+        result = result[inversemaptrue,:]
+        result = result[:,inversemaptrue]
+        return result
+
     
     #Extract the upper triangular part (excluding diagonal for symmetry)
     triu_indices = np.triu_indices(n, k=0)
