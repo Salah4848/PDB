@@ -1,22 +1,23 @@
 from codefiles import *
 
 # Parameters
-n = 300  # Number of nodes
-k=3
-method = lambda m,v: EMbased(m,v,k,blockoutput=True)
-#method = lambda m,v: FANSbased(m,v)
+n = 100  # Number of nodes
+k=4
+method1 = lambda m,v: CVEMbased(m,v,k)
+method2 = lambda m,v: FANSbased(m,v)
+method3 = lambda m,v: VEMbased(m,v,k)
+
+
+methods =[method1,method2,method3]
 
 w,f =random_step_graphon_signal(k,aligned=True)
 
-
 A,X,theta,mu = sample_from_graphon_signal(w,f,n)
 
-theta_hat, mu_hat  = method(A, X)
+pairs = [("true",blockify_signal(f,n),blockify_graphon(w,n))]
 
-'''w_matrix = blockify_graphon(w,n)
-theta_hat = align_graphon(theta_hat,w_matrix,diagonly=True)
-f_vector = blockify_signal(f,n)
-mu_hat = align_signal(mu_hat,f_vector)'''
+for method in methods:
+    theta,mu,name = method(A,X)
+    pairs.append((name,mu,theta))
 
-visualize(w,f,theta_hat,mu_hat)
-#benchmark_error(A,X,theta,mu,w,f,method)
+plot_arrays(pairs)

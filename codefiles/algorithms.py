@@ -1,6 +1,7 @@
 import numpy as np
 from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans
+from .utility import *
 
 
 
@@ -11,7 +12,7 @@ def FANSbased(A,X):
         X : 1xn array, obsrved signal data
         A : nxn array, observed adjacensy matrix
     outputs:
-        (theta_hat,mu_hat)
+        theta_hat,mu_hat,name
     '''
     n=len(X)
     dg = np.zeros_like(A)
@@ -30,7 +31,7 @@ def FANSbased(A,X):
     lamb = 1
     c=1
     d = dg + lamb*df
-    h = c*np.sqrt(np.log(n)/n) #c*np.sqrt(np.log(n)/n)
+    h = c*np.sqrt(np.log(n)/n)
     theta_hat = np.zeros_like(A)
     mu_hat = np.zeros_like(X)
 
@@ -47,18 +48,90 @@ def FANSbased(A,X):
             theta_hat[i,j] = (np.sum(A[neighbors, j]) / size +
                            np.sum(A[i, neighbors]) / size) / 2
             theta_hat[j,i] =theta_hat[i,j]
+    perm=np.argsort(mu_hat)
+    mu_hat =mu_hat[perm]
+    theta_hat = theta_hat[perm,:]
+    theta_hat=theta_hat[:,perm]
+    return theta_hat,mu_hat,"FANS"
 
-    return (theta_hat,mu_hat)
-
-def EMbased(A, X, k, max_iter=100,blockoutput=False):
-    '''
-    An EM based method for blockmodels. https://stephens999.github.io/fiveMinuteStats/intro_to_em.html
+def VEMbased(A,X, K, max_iter=100, tol=1e-6):
+    """
+    Variational EM for joint Stochastic Block Model
     inputs:
         A: Adjacency matrix (n x n).
         X: Node signals (n x 1).
         k: Number of blocks.
     outputs:
-        theta_hat,mu_hat
+        theta_hat,mu_hat,name
+    """
+    n = A.shape[0]
+    
+    #Initialize variational parameters and model parameters
+    tau = np.random.dirichlet(np.ones(K), size=n)
+    pi = np.ones(K) / K
+    Q = np.random.uniform(0, 1, (K, K))
+    M = np.array([X[np.random.choice(n)] for _ in range(K)])
+    for _ in range(max_iter):
+        tau_prev = tau.copy()
+        #E-step: Update variational parameters
+        for i in range(n):
+            log_weights = np.log(pi)
+            for k in range(K):
+                for j in range(n):
+                    if i != j:
+                        if A[i,j] == 1:
+                            log_weights[k] += np.sum(tau[j,l] * np.log(Q[k,l]) for l in range(K))
+                        else:
+                            log_weights[k] += np.sum(tau[j,l] * np.log(1 - Q[k,l]) for l in range(K))
+                log_weights[k] -= 0.5 * ((X[i] - M[k])**2)
+            tau[i] = np.exp(log_weights)
+            tau[i] /= tau[i].sum()
+        
+        # M-step: Update model parameters
+        #Update block weights
+        pi = tau.mean(axis=0)
+        
+        #Update block probability matrix
+        for k in range(K):
+            for l in range(K):
+                num = den = 0
+                for i in range(n):
+                    for j in range(n):
+                        if i != j:
+                            expected_edge = tau[i,k] * tau[j,l]
+                            num += expected_edge * A[i,j]
+                            den += expected_edge
+                
+                Q[k,l] = num / den if den > 0 else 0
+        
+        #Update block means
+        for k in range(K):
+            M[k] = np.sum(tau[:,k] * X) / tau[:,k].sum()
+        
+        #Check convergence
+        if np.max(np.abs(tau - tau_prev)) < tol:
+            break
+    perm = np.argsort(np.diagonal(Q))
+    Q = Q[perm,:]
+    Q = Q[:,perm]
+    pi = pi[perm]
+    M = M[perm]
+    thresholds = np.cumsum(pi)
+    est_graphon = make_step_graphon(thresholds[:-1],Q)
+    est_signal = make_step_signal(thresholds[:-1],M)
+    theta = blockify_graphon(est_graphon,n)
+    mu = blockify_signal(est_signal,n)
+    return theta,mu,"VEM"
+
+def CVEMbased(A, X, k, max_iter=100,blockoutput=True):
+    '''
+    This method is similar to the VEM method but uses an assignment function instead of tau, maaking faster but less guarentees.
+    inputs:
+        A: Adjacency matrix (n x n).
+        X: Node signals (1 x n).
+        k: Number of blocks.
+    outputs:
+        theta_hat,mu_hat,name
     '''
     n = A.shape[0]
 
@@ -100,8 +173,8 @@ def EMbased(A, X, k, max_iter=100,blockoutput=False):
         #M-Step: Update Q and M
         for a in range(k):
             for b in range(k):
-                Q_est[a, b] = np.mean(A[np.ix_(z_new == a, z_new == b)])
-            M_est[a] = np.mean(X[z_new == a])
+                Q_est[a, b] = np.mean(A[np.ix_(z_new == a, z_new == b)]) if A[np.ix_(z_new == a, z_new == b)].size>0 else 0
+            M_est[a] = np.mean(X[z_new == a]) if X[z_new == a].size>0 else 0
 
         #Convergence check
         if np.all(z_est == z_new):
@@ -122,85 +195,4 @@ def EMbased(A, X, k, max_iter=100,blockoutput=False):
     z_mat = np.meshgrid(z_est, z_est)
     theta_est = Q_est[z_mat] 
     #np.fill_diagonal(theta_est,0)
-    return theta_est, mu_est
-
-def align_graphon(theta_hat, true_graphon, diagonly=False):
-    """
-    Align the estimated graphon to the true graphon. We use a sorting method : https://stackoverflow.com/questions/54041397/given-two-arrays-find-the-permutations-that-give-closest-distance-between-two-a
-    Can feed it k-block versions of the matrices.
-    inputs:
-    - theta_hat: Estimated probability matrix (kxk).
-    - true_graphon: True graphon matrix (kxk).
-
-    outputs:
-    - aligned_graphon: Aligned estimated graphon.
-    """
-    n = theta_hat.shape[0]
-
-    if diagonly:
-        #Extract diagonal
-        diaghat = np.diagonal(theta_hat)
-        diagtrue = np.diagonal(true_graphon)
-        #Get the increasing sorting for theta and its inverse for the graphon
-        maphat = np.argsort(diaghat)
-        inversemaptrue =np.argsort(np.argsort(diagtrue))
-        #First sort for increaing diag values
-        result = theta_hat[maphat,:]
-        result = result[:,maphat]
-        #Then apply the inverse sort of the true graphon
-        result = result[inversemaptrue,:]
-        result = result[:,inversemaptrue]
-        return result
-
-    
-    #Extract the upper triangular part (excluding diagonal for symmetry)
-    triu_indices = np.triu_indices(n, k=0)
-    theta_hat_flat = theta_hat[triu_indices]
-    true_graphon_flat = true_graphon[triu_indices]
-    
-    #Sort the flattened arrays
-    true_sort_indices = np.argsort(true_graphon_flat)
-    estimated_sort_indices = np.argsort(theta_hat_flat)
-    
-    #Inverse the true sorting
-    inverse_permutation = np.argsort(true_sort_indices)
-    
-    #Apply the inverse permutation to the sorted estimate
-    aligned_flat = np.zeros_like(theta_hat_flat)
-    aligned_flat = theta_hat_flat[estimated_sort_indices]
-    aligned_flat = aligned_flat[inverse_permutation]
-    
-    #Reconstruct the aligned graphon matrix
-    aligned_graphon = np.zeros_like(theta_hat)
-    aligned_graphon[triu_indices] = aligned_flat
-    temp = np.copy(aligned_graphon)
-    np.fill_diagonal(temp,0)
-    aligned_graphon = temp + aligned_graphon.T  #Symmetrize
-    
-    return aligned_graphon
-
-
-def align_signal(mu_hat, true_signal):
-    '''
-    Aligns the estimated signal to the true signal. Same procedure as for the graphon.
-    Can feed it k-block versions
-    inputs:
-        mu_hat: estimated mean vector (1xk)
-        true_signal: true mean vector (1xk)
-    '''
-    n = len(mu_hat)
-    
-    #Sort arrays
-    true_sort_indices = np.argsort(true_signal)
-    estimated_sort_indices = np.argsort(mu_hat)
-    
-    #Inverse the true sorting
-    inverse_permutation = np.argsort(true_sort_indices)
-    
-    #Apply the inverse permutation to the sorted estimate
-    aligned = np.zeros_like(mu_hat)
-    aligned = mu_hat[estimated_sort_indices]
-    aligned = aligned[inverse_permutation]
-
-    
-    return aligned
+    return theta_est, mu_est, "CVEM"

@@ -1,6 +1,6 @@
 import matplotlib.pyplot as plt
 import numpy as np
-from .algorithms import *
+
 
 def simplify(matrix, k):
     """
@@ -130,60 +130,84 @@ def squared_norm_matrix(M):
 def squared_norm_vector(v):
     return np.dot(v,v)
 
-def benchmark_error(A, X, theta, mu, graphon, signal,method, graph_it=True):
+def align_graphon(theta_hat, true_graphon, diagonly=False):
+    """
+    Align the estimated graphon to the true graphon. We use a sorting method : https://stackoverflow.com/questions/54041397/given-two-arrays-find-the-permutations-that-give-closest-distance-between-two-a
+    Can feed it k-block versions of the matrices.
+    inputs:
+    - theta_hat: Estimated probability matrix (kxk).
+    - true_graphon: True graphon matrix (kxk).
+
+    outputs:
+    - aligned_graphon: Aligned estimated graphon.
+    """
+    n = theta_hat.shape[0]
+
+    if diagonly:
+        #Extract diagonal
+        diaghat = np.diagonal(theta_hat)
+        diagtrue = np.diagonal(true_graphon)
+        #Get the increasing sorting for theta and its inverse for the graphon
+        maphat = np.argsort(diaghat)
+        inversemaptrue =np.argsort(np.argsort(diagtrue))
+        #First sort for increaing diag values
+        result = theta_hat[maphat,:]
+        result = result[:,maphat]
+        #Then apply the inverse sort of the true graphon
+        result = result[inversemaptrue,:]
+        result = result[:,inversemaptrue]
+        return result
+
+    
+    #Extract the upper triangular part (excluding diagonal for symmetry)
+    triu_indices = np.triu_indices(n, k=0)
+    theta_hat_flat = theta_hat[triu_indices]
+    true_graphon_flat = true_graphon[triu_indices]
+    
+    #Sort the flattened arrays
+    true_sort_indices = np.argsort(true_graphon_flat)
+    estimated_sort_indices = np.argsort(theta_hat_flat)
+    
+    #Inverse the true sorting
+    inverse_permutation = np.argsort(true_sort_indices)
+    
+    #Apply the inverse permutation to the sorted estimate
+    aligned_flat = np.zeros_like(theta_hat_flat)
+    aligned_flat = theta_hat_flat[estimated_sort_indices]
+    aligned_flat = aligned_flat[inverse_permutation]
+    
+    #Reconstruct the aligned graphon matrix
+    aligned_graphon = np.zeros_like(theta_hat)
+    aligned_graphon[triu_indices] = aligned_flat
+    temp = np.copy(aligned_graphon)
+    np.fill_diagonal(temp,0)
+    aligned_graphon = temp + aligned_graphon.T  #Symmetrize
+    
+    return aligned_graphon
+
+def align_signal(mu_hat, true_signal):
     '''
-    Graphs the error(s) against the amount of samples used. Used to check rates. min samplesize is 20
+    Aligns the estimated signal to the true signal. Same procedure as for the graphon.
+    Can feed it k-block versions
+    inputs:
+        mu_hat: estimated mean vector (1xk)
+        true_signal: true mean vector (1xk)
     '''
-    minn = 20
-    N = len(X)
-    error_equiv_graphon = np.zeros(N-minn)
-    error_equiv_signal = np.zeros(N-minn)
-    error_prob_matrix = np.zeros(N-minn)
-    error_mean_vector = np.zeros(N-minn)
+    
+    #Sort arrays
+    true_sort_indices = np.argsort(true_signal)
+    estimated_sort_indices = np.argsort(mu_hat)
+    
+    #Inverse the true sorting
+    inverse_permutation = np.argsort(true_sort_indices)
+    
+    #Apply the inverse permutation to the sorted estimate
+    aligned = np.zeros_like(mu_hat)
+    aligned = mu_hat[estimated_sort_indices]
+    aligned = aligned[inverse_permutation]
 
-    for n in range(minn,N):
-        Xn = X[:n]
-        An = A[:n,:n]
-        thetan = theta[:n,:n]
-        mun = mu[:n]
-
-        theta_hat, mu_hat = method(An, Xn)
-
-        w_matrix = blockify_graphon(graphon, n)
-        f_matrix = blockify_signal(signal, n)
-        aligned_theta_hat = align_graphon(theta_hat, w_matrix)
-        aligned_mu_hat = align_signal(mu_hat, f_matrix)
-
-        error_equiv_graphon[n-minn] = squared_norm_matrix(aligned_theta_hat-w_matrix)/(n*n)
-        error_equiv_signal[n-minn] = squared_norm_vector(aligned_mu_hat-f_matrix)/n
-        error_prob_matrix[n-minn] = squared_norm_matrix(theta_hat-thetan)/(n*n)
-        error_mean_vector[n-minn] = squared_norm_vector(mu_hat-mun)/n
-
-    if graph_it:
-        t = np.arange(minn,N)
-        
-        plt.figure(figsize=(12, 6))
-
-        plt.subplot(2, 2, 1)
-        plt.title("Graphon L2 error modulo sigma")
-        plt.plot(t,error_equiv_graphon)
-
-        plt.subplot(2, 2, 2)
-        plt.title("Signal L2 error modulo sigma")
-        plt.plot(t,error_equiv_signal)
-
-        plt.subplot(2, 2, 3)
-        plt.title("Error theta_hat-theta squared")
-        plt.plot(t,error_prob_matrix)
-
-        plt.subplot(2, 2, 4)
-        plt.title("Error mu_hat-mu squared")
-        plt.plot(t,error_mean_vector)
-
-
-        plt.tight_layout()
-        plt.show()
-
+    
+    return aligned
 
 def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1),sort=False):
     '''
@@ -197,16 +221,7 @@ def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1),sort=Fals
     if sort:
         values = np.sort(values)
     
-    def signal(x):
-
-        x = np.asarray(x)
-        result = np.empty_like(x, dtype=np.float64)
-        
-        x_regions = np.digitize(x, thresholds, right=False)
-        result = values[x_regions]
-
-        
-        return result
+    signal =make_step_signal(thresholds,values)
     
     return signal, thresholds, values
 
@@ -225,16 +240,7 @@ def random_step_graphon(k, value_range=(0, 1), threshold_range=(0, 1),sort=False
         values = values[perm,:]
         values = values[:,perm]
     
-    def graphon(x, y):
-
-        x = np.asarray(x)
-        y = np.asarray(y)
-        
-        x_regions = np.digitize(x, thresholds, right=False)
-        y_regions = np.digitize(y, thresholds, right=False)
-        
-        result = values[x_regions, y_regions]
-        return result
+    graphon = make_step_graphon(thresholds,values)
     
     return graphon, thresholds, values
 
@@ -259,6 +265,25 @@ def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), th
         svalues= np.sort(svalues)
 
 
+    graphon = make_step_graphon(thresholds,gvalues)
+    signal = make_step_signal(thresholds,svalues)
+    
+    return graphon, signal
+
+def make_step_signal(thresholds, values):
+    def signal(x):
+
+        x = np.asarray(x)
+        result = np.empty_like(x, dtype=np.float64)
+        
+        x_regions = np.digitize(x, thresholds, right=False)
+        result = values[x_regions]
+
+        
+        return result
+    return signal
+
+def make_step_graphon(thresholds,values):
     def graphon(x, y):
 
         x = np.asarray(x)
@@ -267,18 +292,6 @@ def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), th
         x_regions = np.digitize(x, thresholds, right=False)
         y_regions = np.digitize(y, thresholds, right=False)
         
-        result = gvalues[x_regions, y_regions]
+        result = values[x_regions, y_regions]
         return result
-    
-    def signal(x):
-
-        x = np.asarray(x)
-        result = np.empty_like(x, dtype=np.float64)
-        
-        x_regions = np.digitize(x, thresholds, right=False)
-        result = svalues[x_regions]
-
-        
-        return result
-    
-    return graphon, signal
+    return graphon
