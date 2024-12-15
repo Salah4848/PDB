@@ -2,11 +2,11 @@ from codefiles import *
 
 # Parameters
 n = 100  # Number of nodes
-k=4
+k=10
 
 w,f =random_step_graphon_signal(k,aligned=True)
-'''w = lambda x,y: np.cos(10*(x+y))
-f = lambda x: 10*np.cos(10*(x+x))'''
+w = lambda x,y: np.cos((x+y))
+f = lambda x: 10*np.cos((x+x))
 A,X,theta,mu,xi = sample_from_graphon_signal(w,f,n)
 
 method1 = lambda m,v: CVEMbased(m,v,k)
