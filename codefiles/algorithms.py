@@ -197,7 +197,7 @@ def CVEMbased(A, X, k, max_iter=100,blockoutput=True):
     #np.fill_diagonal(theta_est,0)
     return theta_est, mu_est, "CVEM"
 
-def VEMbasedV(A, X, K, max_iter=100, tol=1e-6, fixed_point_iter=20):
+def VEMbasedV(A, X, K, max_iter=100, tol=1e-6, fixed_point_iter=50):
     """
     Vectorized Variational EM for joint Stochastic Block Model. In this implemetation we ignore that j!=i for certain calculation.
     inputs:

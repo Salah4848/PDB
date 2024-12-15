@@ -73,7 +73,7 @@ def plot_arrays(array_pairs):
     ax1 = axes[0]  # First row (single plot for all 1D arrays)
     for i, (title, arr_1d, _) in enumerate(array_pairs):
         ax1.plot(arr_1d, label=f'{title}')
-    ax1.set_title('1D Arrays Plot')
+    ax1.set_title('Signal plot')
     ax1.set_xlabel('Index')
     ax1.set_ylabel('Value')
     ax1.legend()

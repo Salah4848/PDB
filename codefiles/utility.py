@@ -216,6 +216,7 @@ def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1),sort=Fals
 
     thresholds = np.sort(np.random.uniform(low=threshold_range[0], high=threshold_range[1], size=k-1))
     
+    
     values = np.random.uniform(low=value_range[0], high=value_range[1], size=k)
 
     if sort:
@@ -249,7 +250,9 @@ def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), th
     Generate a random step graphon-signal.
     
     """
-    thresholds = np.sort(np.random.uniform(low=threshold_range[0], high=threshold_range[1], size=k-1))
+    dirichlet_probs = np.random.dirichlet([20] * (k))
+    thresholds = np.cumsum(dirichlet_probs)[:-1]  # Cumulative sum ensures sorted values
+    thresholds = threshold_range[0] + thresholds * (threshold_range[1] - threshold_range[0])  # Scale to range
     
     gvalues = np.random.uniform(low=graphon_range[0], high=graphon_range[1], size=(k, k))
     gvalues = (gvalues + gvalues.T) / 2
