@@ -29,7 +29,7 @@ def FANSbased(A,X,xi):
 
     
     lamb = 0
-    c=1
+    c=0.05
     d = dg + lamb*df
     h = c*np.sqrt(np.log(n)/n)
     theta_hat = np.zeros_like(A)
@@ -197,7 +197,7 @@ def CVEMbased(A, X, k, max_iter=100,blockoutput=True):
     #np.fill_diagonal(theta_est,0)
     return theta_est, mu_est, "CVEM"
 
-def VEMbasedV(A, X, K, max_iter=100, tol=1e-6):
+def VEMbasedV(A, X, K, max_iter=100, tol=1e-6, fixed_point_iter=20):
     """
     Vectorized Variational EM for joint Stochastic Block Model. In this implemetation we ignore that j!=i for certain calculation.
     inputs:
@@ -221,15 +221,15 @@ def VEMbasedV(A, X, K, max_iter=100, tol=1e-6):
         log_pi = np.log(pi)
         log_Q = np.log(Q)
         log_1_minus_Q = np.log(1 - Q)
+        for _ in range(fixed_point_iter):
+            adjacency_term = A @ (tau @ log_Q.T) + (1 - A) @ (tau @ log_1_minus_Q.T) #ignored i!=j
 
-        adjacency_term = A @ (tau @ log_Q.T) + (1 - A) @ (tau @ log_1_minus_Q.T) #ignored i!=j
+            signal_term = -0.5 * ((X[:, None] - M[None, :]) ** 2)  
 
-        signal_term = -0.5 * ((X[:, None] - M[None, :]) ** 2)  
+            log_weights = log_pi + adjacency_term + signal_term  
 
-        log_weights = log_pi + adjacency_term + signal_term  
-
-        tau = np.exp(log_weights)
-        tau /= tau.sum(axis=1, keepdims=True)
+            tau = np.exp(log_weights)
+            tau /= tau.sum(axis=1, keepdims=True)
 
         # M-step: Update model parameters
         pi = tau.mean(axis=0)
