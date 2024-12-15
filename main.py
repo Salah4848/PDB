@@ -11,7 +11,7 @@ A,X,theta,mu,xi = sample_from_graphon_signal(w,f,n)
 
 method1 = lambda m,v: CVEMbased(m,v,k)
 method2 = lambda m,v: FANSbased(m,v,xi)
-method3 = lambda m,v: VEMbasedV(m,v,k)
+method3 = lambda m,v: VEMbasedV(m,v,k+2)
 
 methods =[method3]
 

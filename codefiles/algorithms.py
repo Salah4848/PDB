@@ -219,8 +219,8 @@ def VEMbasedV(A, X, K, max_iter=100, tol=1e-6, fixed_point_iter=50):
 
         # E-step: Update variational parameters
         log_pi = np.log(pi)
-        log_Q = np.log(Q)
-        log_1_minus_Q = np.log(1 - Q)
+        log_Q = np.log(Q+1e-10)
+        log_1_minus_Q = np.log(1 - Q+1e-10)
         for _ in range(fixed_point_iter):
             adjacency_term = A @ (tau @ log_Q.T) + (1 - A) @ (tau @ log_1_minus_Q.T) #ignored i!=j
 
