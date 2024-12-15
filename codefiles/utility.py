@@ -100,7 +100,7 @@ def sample_from_graphon_signal(w, f, n, symmetric=True, self_loops=False):
     if not self_loops:
         np.fill_diagonal(A, 0)
         
-    return (A.astype(int).astype(float), X, theta, mu)
+    return A.astype(float), X, theta, mu, vertices
 
 def blockify_graphon(graphon, n):
     '''

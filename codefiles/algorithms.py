@@ -5,7 +5,7 @@ from .utility import *
 
 
 
-def FANSbased(A,X):
+def FANSbased(A,X,xi):
     '''
     Uses FANS algorithm.
     inputs:
@@ -28,7 +28,7 @@ def FANSbased(A,X):
             df[j,i] = df[i,j]
 
     
-    lamb = 1
+    lamb = 0
     c=1
     d = dg + lamb*df
     h = c*np.sqrt(np.log(n)/n)
@@ -42,13 +42,13 @@ def FANSbased(A,X):
         neighbors = np.where(temp<=q)
         size = len(neighbors[0])
         #estimate mu_i
-        mu_hat[i] = np.sum(X[neighbors]) / size
+        mu_hat[i] = X[i]#np.sum(X[neighbors]) / size
         for j in range(i+1):
             #estimate theta_ij
             theta_hat[i,j] = (np.sum(A[neighbors, j]) / size +
                            np.sum(A[i, neighbors]) / size) / 2
             theta_hat[j,i] =theta_hat[i,j]
-    perm=np.argsort(mu_hat)
+    perm=np.argsort(xi)
     mu_hat =mu_hat[perm]
     theta_hat = theta_hat[perm,:]
     theta_hat=theta_hat[:,perm]
@@ -183,7 +183,7 @@ def CVEMbased(A, X, k, max_iter=100,blockoutput=True):
         z_est = z_new
     
     if blockoutput:
-        maparr = np.argsort(M_est)
+        maparr = np.argsort(np.diagonal(Q_est))
         mapdic = {maparr[i]:i for i in range(len(maparr))}
         z_block = np.array([mapdic[x] for x in z_est])
         z_est = np.sort(z_block)
@@ -196,3 +196,61 @@ def CVEMbased(A, X, k, max_iter=100,blockoutput=True):
     theta_est = Q_est[z_mat] 
     #np.fill_diagonal(theta_est,0)
     return theta_est, mu_est, "CVEM"
+
+def VEMbasedV(A, X, K, max_iter=100, tol=1e-6):
+    """
+    Vectorized Variational EM for joint Stochastic Block Model. In this implemetation we ignore that j!=i for certain calculation.
+    inputs:
+        A: Adjacency matrix (n x n).
+        X: Node signals (n x 1).
+        K: Number of blocks.
+    outputs:
+        theta_hat, mu_hat, name
+    """
+    n = A.shape[0]
+
+    tau = np.random.dirichlet(np.ones(K), size=n)  # (n, K)
+    pi = np.ones(K) / K  # (K,)
+    Q = np.random.uniform(0.1, 0.9, (K, K))  # (K, K)
+    M = np.array([X[np.random.choice(n)] for _ in range(K)])  # (K,)
+
+    for _ in range(max_iter):
+        tau_prev = tau.copy()
+
+        # E-step: Update variational parameters
+        log_pi = np.log(pi)
+        log_Q = np.log(Q)
+        log_1_minus_Q = np.log(1 - Q)
+
+        adjacency_term = A @ (tau @ log_Q.T) + (1 - A) @ (tau @ log_1_minus_Q.T) #ignored i!=j
+
+        signal_term = -0.5 * ((X[:, None] - M[None, :]) ** 2)  
+
+        log_weights = log_pi + adjacency_term + signal_term  
+
+        tau = np.exp(log_weights)
+        tau /= tau.sum(axis=1, keepdims=True)
+
+        # M-step: Update model parameters
+        pi = tau.mean(axis=0)
+
+        numerator = tau.T @ A @ tau
+        denominator = tau.T @ np.ones((n, n)) @ tau
+        Q = np.divide(numerator, denominator, out=np.zeros_like(numerator), where=denominator > 0) # here too ignored i!=j
+
+        M = np.sum(tau * X[:, None], axis=0) / tau.sum(axis=0)
+
+        if np.max(np.abs(tau - tau_prev)) < tol:
+            break
+
+    perm = np.argsort(np.diagonal(Q))
+    Q = Q[perm][:, perm]
+    pi = pi[perm]
+    M = M[perm]
+    thresholds = np.cumsum(pi)
+    est_graphon = make_step_graphon(thresholds[:-1], Q)
+    est_signal = make_step_signal(thresholds[:-1], M)
+    theta = blockify_graphon(est_graphon, n)
+    mu = blockify_signal(est_signal, n)
+
+    return theta, mu, "VEM"
