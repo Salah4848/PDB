@@ -74,8 +74,8 @@ def plot_arrays(array_pairs):
     for i, (title, arr_1d, _) in enumerate(array_pairs):
         ax1.plot(arr_1d, label=f'{title}')
     ax1.set_title('Signal plot')
-    ax1.set_xlabel('Index')
     ax1.set_ylabel('Value')
+    ax1.set_xticks([])
     ax1.legend()
     ax1.grid(True)
 

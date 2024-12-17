@@ -3,57 +3,6 @@ from scipy.spatial.distance import cdist
 from sklearn.cluster import KMeans
 from .utility import *
 
-
-
-def FANSbased(A,X,xi):
-    '''
-    Uses FANS algorithm.
-    inputs:
-        X : 1xn array, obsrved signal data
-        A : nxn array, observed adjacensy matrix
-    outputs:
-        theta_hat,mu_hat,name
-    '''
-    n=len(X)
-    dg = np.zeros_like(A)
-    df = np.zeros_like(A)
-    #Compute the distances for each ij
-    for i in range(n):
-        for j in range(i+1):
-            temp1 = np.delete(A,[i,j],1)
-            temp2 = np.delete(X,[i,j],0)
-            dg[i,j] = abs(np.max(np.dot(A[:,i]-A[:,j],temp1)))/n
-            df[i,j] = abs(np.max((X[i]-X[j])*temp2))
-            dg[j,i] = dg[i,j]
-            df[j,i] = df[i,j]
-
-    
-    lamb = 0
-    c=0.05
-    d = dg + lamb*df
-    h = c*np.sqrt(np.log(n)/n)
-    theta_hat = np.zeros_like(A)
-    mu_hat = np.zeros_like(X)
-
-    for i in range(n):
-        #find neighbors for graphon
-        temp = np.delete(d[i],i)
-        q = np.quantile(temp,h)
-        neighbors = np.where(temp<=q)
-        size = len(neighbors[0])
-        #estimate mu_i
-        mu_hat[i] = X[i]#np.sum(X[neighbors]) / size
-        for j in range(i+1):
-            #estimate theta_ij
-            theta_hat[i,j] = (np.sum(A[neighbors, j]) / size +
-                           np.sum(A[i, neighbors]) / size) / 2
-            theta_hat[j,i] =theta_hat[i,j]
-    perm=np.argsort(xi)
-    mu_hat =mu_hat[perm]
-    theta_hat = theta_hat[perm,:]
-    theta_hat=theta_hat[:,perm]
-    return theta_hat,mu_hat,"FANS"
-
 def VEMbased(A,X, K, max_iter=100, tol=1e-6):
     """
     Variational EM for joint Stochastic Block Model
@@ -197,7 +146,7 @@ def CVEMbased(A, X, k, max_iter=100,blockoutput=True):
     #np.fill_diagonal(theta_est,0)
     return theta_est, mu_est, "CVEM"
 
-def VEMbasedV(A, X, K, max_iter=100, tol=1e-6, fixed_point_iter=50):
+def VEMbasedV(A, X, K, sort=True, max_iter=100, tol=1e-6, fixed_point_iter=50):
     """
     Vectorized Variational EM for joint Stochastic Block Model. In this implemetation we ignore that j!=i for certain calculation.
     inputs:
@@ -217,7 +166,7 @@ def VEMbasedV(A, X, K, max_iter=100, tol=1e-6, fixed_point_iter=50):
     for _ in range(max_iter):
         tau_prev = tau.copy()
 
-        # E-step: Update variational parameters
+        #E-step: Update variational parameters
         log_pi = np.log(pi)
         log_Q = np.log(Q+1e-10)
         log_1_minus_Q = np.log(1 - Q+1e-10)
@@ -227,26 +176,26 @@ def VEMbasedV(A, X, K, max_iter=100, tol=1e-6, fixed_point_iter=50):
             signal_term = -0.5 * ((X[:, None] - M[None, :]) ** 2)  
 
             log_weights = log_pi + adjacency_term + signal_term  
-
+            log_weights -= log_weights.max(axis=1, keepdims=True) #To avoid numerical errors, the adjustement is compensated when normalizing
             tau = np.exp(log_weights)
             tau /= tau.sum(axis=1, keepdims=True)
 
-        # M-step: Update model parameters
+        #M-step: Update model parameters
         pi = tau.mean(axis=0)
 
         numerator = tau.T @ A @ tau
         denominator = tau.T @ np.ones((n, n)) @ tau
         Q = np.divide(numerator, denominator, out=np.zeros_like(numerator), where=denominator > 0) # here too ignored i!=j
 
-        M = np.sum(tau * X[:, None], axis=0) / tau.sum(axis=0)
+        M = np.sum(tau * X[:, None], axis=0) / (tau.sum(axis=0)+0.01)
 
         if np.max(np.abs(tau - tau_prev)) < tol:
             break
-
-    perm = np.argsort(np.diagonal(Q))
-    Q = Q[perm][:, perm]
-    pi = pi[perm]
-    M = M[perm]
+    if sort:
+        perm = np.argsort(np.diagonal(Q))
+        Q = Q[perm][:, perm]
+        pi = pi[perm]
+        M = M[perm]
     thresholds = np.cumsum(pi)
     est_graphon = make_step_graphon(thresholds[:-1], Q)
     est_signal = make_step_signal(thresholds[:-1], M)
@@ -254,3 +203,64 @@ def VEMbasedV(A, X, K, max_iter=100, tol=1e-6, fixed_point_iter=50):
     mu = blockify_signal(est_signal, n)
 
     return theta, mu, "VEM"
+
+def FANSbased(A, X):
+    '''
+    Uses FANS algorithm (vectorized).
+    Inputs:
+        X : 1xn array, observed signal data
+        A : nxn array, observed adjacency matrix
+    Outputs:
+        theta_hat, mu_hat, name
+    '''
+    n = len(X)
+
+    # Compute dg and df using broadcasting
+    dg = np.zeros((n, n))
+    df = np.zeros((n, n))
+
+    for i in range(n):
+        temp1 = np.delete(A, i, axis=1)
+        temp2 = np.delete(X, i, axis=0)
+        dg[i] = np.max(np.abs((A[:, i][:, np.newaxis] - A).dot(temp1)), axis=1) / n
+        df[i] = np.max(np.abs((X[i] - X)[:, np.newaxis] * temp2), axis=1)
+
+    # Symmetrize dg and df
+    dg = (dg + dg.T) / 2
+    df = (df + df.T) / 2
+
+    # Combined distance
+    lamb = 1
+    c = 1
+    d = dg + lamb * df
+    h = c * np.sqrt(np.log(n) / n)
+
+    # Initialize outputs
+    theta_hat = np.zeros_like(A)
+    mu_hat = np.zeros_like(X)
+
+    # Compute theta_hat and mu_hat
+    for i in range(n):
+        # Find neighbors for graphon
+        temp = np.delete(d[i], i)
+        q = np.quantile(temp, h)
+        neighbors = np.where(temp <= q)[0]
+        neighbors = neighbors[neighbors != i]
+        size = len(neighbors)
+
+        # Estimate mu_hat[i]
+        if size > 0:
+            mu_hat[i] = np.mean(X[neighbors])  # Average over neighbors
+        else:
+            mu_hat[i] = X[i]  # Fallback to self if no neighbors
+
+        for j in range(i + 1):
+            if size > 0:
+                # Estimate theta_hat[i, j]
+                theta_hat[i, j] = (np.sum(A[neighbors, j]) / size +
+                                   np.sum(A[i, neighbors]) / size) / 2
+            else:
+                theta_hat[i, j] = A[i, j]  # Fallback to original value
+            theta_hat[j, i] = theta_hat[i, j]  # Ensure symmetry
+
+    return theta_hat, mu_hat, "FANS"

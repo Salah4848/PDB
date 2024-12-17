@@ -118,7 +118,7 @@ def blockify_signal(signal,n):
     '''
     Turn our signal into an n-step function. Used for alignement
     outputs:
-        signal_matrix: nxn 2D array
+        signal_matrix: nx1 1D array
     '''
     x = np.linspace(0, 1, n)
     signal_matrix = signal(x)
@@ -132,62 +132,38 @@ def squared_norm_vector(v):
 
 def align_graphon(theta_hat, true_graphon, diagonly=False):
     """
-    Align the estimated graphon to the true graphon. We use a sorting method : https://stackoverflow.com/questions/54041397/given-two-arrays-find-the-permutations-that-give-closest-distance-between-two-a
-    Can feed it k-block versions of the matrices.
+    Align the estimated graphon to the true graphon. Uses node degrees for approximate optimal alignment when the marignal varies enough.
     inputs:
-    - theta_hat: Estimated probability matrix (kxk).
-    - true_graphon: True graphon matrix (kxk).
+    - theta_hat: Estimated probability matrix (nxn).
+    - true_graphon: True graphon matrix (nxn).
 
     outputs:
     - aligned_graphon: Aligned estimated graphon.
     """
     n = theta_hat.shape[0]
 
-    if diagonly:
-        #Extract diagonal
-        diaghat = np.diagonal(theta_hat)
-        diagtrue = np.diagonal(true_graphon)
-        #Get the increasing sorting for theta and its inverse for the graphon
-        maphat = np.argsort(diaghat)
-        inversemaptrue =np.argsort(np.argsort(diagtrue))
-        #First sort for increaing diag values
-        result = theta_hat[maphat,:]
-        result = result[:,maphat]
-        #Then apply the inverse sort of the true graphon
-        result = result[inversemaptrue,:]
-        result = result[:,inversemaptrue]
-        return result
+    #get the node degress
+    degrees_hat = np.sum(theta_hat, axis = 0)
+    degrees_true = np.sum(true_graphon, axis =0)
 
+    #Get the permutations
+    perm_hat = np.argsort(degrees_hat)
+    perm_true = np.argsort(degrees_true)
+
+    #inverse the true sorting
+    inverse_perm_true = np.argsort(perm_true)
+
+    #apply permutations
+    theta_hat = theta_hat[perm_hat,:]
+    theta_hat = theta_hat[:,perm_hat]
+    theta_hat = theta_hat[inverse_perm_true,:]
+    theta_hat = theta_hat[:,inverse_perm_true]
     
-    #Extract the upper triangular part (excluding diagonal for symmetry)
-    triu_indices = np.triu_indices(n, k=0)
-    theta_hat_flat = theta_hat[triu_indices]
-    true_graphon_flat = true_graphon[triu_indices]
-    
-    #Sort the flattened arrays
-    true_sort_indices = np.argsort(true_graphon_flat)
-    estimated_sort_indices = np.argsort(theta_hat_flat)
-    
-    #Inverse the true sorting
-    inverse_permutation = np.argsort(true_sort_indices)
-    
-    #Apply the inverse permutation to the sorted estimate
-    aligned_flat = np.zeros_like(theta_hat_flat)
-    aligned_flat = theta_hat_flat[estimated_sort_indices]
-    aligned_flat = aligned_flat[inverse_permutation]
-    
-    #Reconstruct the aligned graphon matrix
-    aligned_graphon = np.zeros_like(theta_hat)
-    aligned_graphon[triu_indices] = aligned_flat
-    temp = np.copy(aligned_graphon)
-    np.fill_diagonal(temp,0)
-    aligned_graphon = temp + aligned_graphon.T  #Symmetrize
-    
-    return aligned_graphon
+    return theta_hat
 
 def align_signal(mu_hat, true_signal):
     '''
-    Aligns the estimated signal to the true signal. Same procedure as for the graphon.
+    Aligns the estimated signal to the true signal. It uses sorting, which provides an exact optimal alignment.
     Can feed it k-block versions
     inputs:
         mu_hat: estimated mean vector (1xk)
@@ -202,12 +178,11 @@ def align_signal(mu_hat, true_signal):
     inverse_permutation = np.argsort(true_sort_indices)
     
     #Apply the inverse permutation to the sorted estimate
-    aligned = np.zeros_like(mu_hat)
-    aligned = mu_hat[estimated_sort_indices]
-    aligned = aligned[inverse_permutation]
+    mu_hat = mu_hat[estimated_sort_indices]
+    mu_hat = mu_hat[inverse_permutation]
 
     
-    return aligned
+    return mu_hat
 
 def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1),sort=False):
     '''
@@ -250,7 +225,7 @@ def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), th
     Generate a random step graphon-signal.
     
     """
-    dirichlet_probs = np.random.dirichlet([20] * (k))
+    dirichlet_probs = np.random.dirichlet([10] * (k))
     thresholds = np.cumsum(dirichlet_probs)[:-1]  # Cumulative sum ensures sorted values
     thresholds = threshold_range[0] + thresholds * (threshold_range[1] - threshold_range[0])  # Scale to range
     
@@ -298,3 +273,24 @@ def make_step_graphon(thresholds,values):
         result = values[x_regions, y_regions]
         return result
     return graphon
+
+def align_graphon_signal(theta_hat,mu_hat, true_graphon, true_signal):
+    '''
+    We use the signal to align our graphon-signal estimate
+    outputs:
+    (theta_aligned,mu_aligned)
+    '''
+
+    perm = np.argsort(true_signal)
+    perm_hat = np.argsort(mu_hat)
+
+    inverse_perm = np.argsort(perm)
+
+    mu_hat = mu_hat[perm_hat]
+    theta_hat = theta_hat[perm_hat,:]
+    theta_hat = theta_hat[:,perm_hat]
+    mu_hat = mu_hat[inverse_perm]
+    theta_hat = theta_hat[inverse_perm,:]
+    theta_hat = theta_hat[:,inverse_perm]
+
+    return theta_hat, mu_hat
