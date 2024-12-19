@@ -6,32 +6,33 @@ def benchmark_error(A, X, theta, mu, graphon, signal,method, graph_it=True):
     Graphs the error(s) against the amount of samples used. Used to check rates. min samplesize is 20
     '''
     minn = 20
+    intervals = 20
     N = len(X)
-    error_equiv_graphon = np.zeros(N-minn)
-    error_equiv_signal = np.zeros(N-minn)
-    error_prob_matrix = np.zeros(N-minn)
-    error_mean_vector = np.zeros(N-minn)
+    error_equiv_graphon = []
+    error_equiv_signal = []
+    error_prob_matrix = []
+    error_mean_vector = []
 
-    for n in range(minn,N):
+    for n in range(minn,N,intervals):
         Xn = X[:n]
         An = A[:n,:n]
         thetan = theta[:n,:n]
         mun = mu[:n]
 
-        theta_hat, mu_hat = method(An, Xn)
+        theta_hat, mu_hat, _ = method(An, Xn)
 
         w_matrix = blockify_graphon(graphon, n)
         f_matrix = blockify_signal(signal, n)
         aligned_theta_hat = align_graphon(theta_hat, w_matrix)
         aligned_mu_hat = align_signal(mu_hat, f_matrix)
 
-        error_equiv_graphon[n-minn] = squared_norm_matrix(aligned_theta_hat-w_matrix)/(n*n)
-        error_equiv_signal[n-minn] = squared_norm_vector(aligned_mu_hat-f_matrix)/n
-        error_prob_matrix[n-minn] = squared_norm_matrix(theta_hat-thetan)/(n*n)
-        error_mean_vector[n-minn] = squared_norm_vector(mu_hat-mun)/n
+        error_equiv_graphon.append(squared_norm_matrix(aligned_theta_hat-w_matrix)/(n*n))
+        error_equiv_signal.append(squared_norm_vector(aligned_mu_hat-f_matrix)/n)
+        error_prob_matrix.append(squared_norm_matrix(theta_hat-thetan)/(n*n))
+        error_mean_vector.append(squared_norm_vector(mu_hat-mun)/n)
 
     if graph_it:
-        t = np.arange(minn,N)
+        t = np.arange(minn,N,intervals)
         
         plt.figure(figsize=(12, 6))
 

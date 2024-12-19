@@ -130,7 +130,7 @@ def squared_norm_matrix(M):
 def squared_norm_vector(v):
     return np.dot(v,v)
 
-def align_graphon(theta_hat, true_graphon, diagonly=False):
+def align_graphon(theta_hat, true_graphon):
     """
     Align the estimated graphon to the true graphon. Uses node degrees for approximate optimal alignment when the marignal varies enough.
     inputs:
@@ -199,7 +199,7 @@ def random_step_signal(k, value_range=(-10,10), threshold_range=(0, 1),sort=Fals
     
     signal =make_step_signal(thresholds,values)
     
-    return signal, thresholds, values
+    return signal
 
 def random_step_graphon(k, value_range=(0, 1), threshold_range=(0, 1),sort=False):
     """
@@ -218,9 +218,9 @@ def random_step_graphon(k, value_range=(0, 1), threshold_range=(0, 1),sort=False
     
     graphon = make_step_graphon(thresholds,values)
     
-    return graphon, thresholds, values
+    return graphon
 
-def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-10,10), threshold_range=(0, 1),aligned=False):
+def random_step_graphon_signal(k, graphon_range=(0, 1),signal_range=(-5,5), threshold_range=(0, 1),aligned=False):
     """
     Generate a random step graphon-signal.
     
@@ -274,23 +274,132 @@ def make_step_graphon(thresholds,values):
         return result
     return graphon
 
-def align_graphon_signal(theta_hat,mu_hat, true_graphon, true_signal):
+def mat_vect_error(M1,v1,M2,v2):
     '''
-    We use the signal to align our graphon-signal estimate
+    Matrices must be shape nxn and vectors must be length n
+    '''
+    n=M1.shape[0]
+
+    error = squared_norm_vector(v1-v2)/n + squared_norm_matrix(M1-M2)/(n*n)
+    return error
+
+def align_graphon_signal(theta_hat,mu_hat, true_graphon, true_signal, usegraphon=False):
+    '''
+    This function aligns our estimates to the ground truth.
     outputs:
     (theta_aligned,mu_aligned)
     '''
+    n= theta_hat.shape[0]
+    def degreemethod(mat,vect,tmat,tvect):
 
-    perm = np.argsort(true_signal)
-    perm_hat = np.argsort(mu_hat)
+        #get the node degress
+        degrees_hat = np.sum(mat, axis = 0)
+        degrees_true = np.sum(tmat, axis =0)
 
-    inverse_perm = np.argsort(perm)
+        #Get the permutations
+        perm_hat = np.argsort(degrees_hat)
+        perm_true = np.argsort(degrees_true)
 
-    mu_hat = mu_hat[perm_hat]
-    theta_hat = theta_hat[perm_hat,:]
-    theta_hat = theta_hat[:,perm_hat]
-    mu_hat = mu_hat[inverse_perm]
-    theta_hat = theta_hat[inverse_perm,:]
-    theta_hat = theta_hat[:,inverse_perm]
+        #inverse the true sorting
+        inverse_perm_true = np.argsort(perm_true)
 
-    return theta_hat, mu_hat
+        #apply permutations
+        mat = mat[perm_hat,:]
+        mat = mat[:,perm_hat]
+        mat = mat[inverse_perm_true,:]
+        mat = mat[:,inverse_perm_true]
+        vect = vect[perm_hat]
+        vect = vect[inverse_perm_true]
+        return mat,vect
+    
+    def sigmethod(mat,vect,tmat,tvect):
+        perm = np.argsort(tvect)
+        perm_hat = np.argsort(vect)
+
+        inverse_perm = np.argsort(perm)
+
+        
+        mat = mat[perm_hat,:]
+        mat = mat[:,perm_hat]
+        mat = mat[inverse_perm,:]
+        mat = mat[:,inverse_perm]
+        vect = vect[perm_hat]
+        vect = vect[inverse_perm]
+        return mat, vect
+    
+    def diagmethod(mat,vect,tmat,tvect):
+
+        perm = np.argsort(np.diagonal(tmat))
+        perm_hat = np.argsort(np.diagonal(mat))
+
+        inverse_perm = np.argsort(perm)
+
+        mat = mat[perm_hat,:]
+        mat = mat[:,perm_hat]
+        mat = mat[inverse_perm,:]
+        mat = mat[:,inverse_perm]
+        vect = vect[perm_hat]
+        vect = vect[inverse_perm]
+        return mat, vect
+    
+    def antidiagmethod(mat,vect,tmat,tvect):
+
+        perm = np.argsort(np.fliplr(tmat).diagonal())
+        perm_hat = np.argsort(np.fliplr(mat).diagonal())
+
+        inverse_perm = np.argsort(perm)
+
+        mat = mat[perm_hat,:]
+        mat = mat[:,perm_hat]
+        mat = mat[inverse_perm,:]
+        mat = mat[:,inverse_perm]
+        vect = vect[perm_hat]
+        vect = vect[inverse_perm]
+        return mat, vect
+
+
+
+    methods = [degreemethod,sigmethod,diagmethod,antidiagmethod]
+    aligned = []
+    prev = np.inf
+    index = 0
+    best = 0
+    for method in methods:
+        aligned_mat,aligned_vect = method(theta_hat,mu_hat,true_graphon,true_signal)
+        aligned.append((aligned_mat,aligned_vect))
+        if usegraphon:
+            error = squared_norm_matrix(aligned_mat-true_graphon)/(n**2)
+        else:
+            error = mat_vect_error(aligned_mat,aligned_vect,true_graphon,true_signal)
+        if error<prev:
+            best = index
+            prev = error
+        index+=1
+    print(best)
+    return aligned[best]
+
+def make_diff_signal(graphon_func, initconstant = 5, diffusion_num=500, sequence=lambda n: 1.*pow(2,n),precision=300):
+    '''
+    Makes a diffused signal fucntion form the input graphon:
+    inputs:
+        graphon_funct: must be the graphon function
+        diffusion_num: amount of times to run a diffusion
+        sequence: the sequence which scales each diffusion
+    outputs:
+        signal_func
+    '''
+    g_mat = blockify_graphon(graphon_func,precision)
+
+    n = g_mat.shape[0]
+    f0 = initconstant*np.ones(n)
+    f =  sequence(0)*f0 # Initialize with the term for l = 0
+    
+    S_power = np.eye(n)  # Initialize A^0 as the identity matrix
+    for l in range(1, diffusion_num + 1):
+        S_power = np.dot(S_power, g_mat)/precision
+        f += sequence(l) * np.dot(S_power, f0)
+
+    thresholds = np.linspace(0,1,100)
+    signal_func = make_step_signal(thresholds[:-1],f)
+
+    return signal_func

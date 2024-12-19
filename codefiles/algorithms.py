@@ -1,5 +1,7 @@
 import numpy as np
 from scipy.spatial.distance import cdist
+from scipy.optimize import minimize
+from scipy.interpolate import BSpline
 from sklearn.cluster import KMeans
 from .utility import *
 
@@ -72,81 +74,7 @@ def VEMbased(A,X, K, max_iter=100, tol=1e-6):
     mu = blockify_signal(est_signal,n)
     return theta,mu,"VEM"
 
-def CVEMbased(A, X, k, max_iter=100,blockoutput=True):
-    '''
-    This method is similar to the VEM method but uses an assignment function instead of tau, maaking faster but less guarentees.
-    inputs:
-        A: Adjacency matrix (n x n).
-        X: Node signals (1 x n).
-        k: Number of blocks.
-    outputs:
-        theta_hat,mu_hat,name
-    '''
-    n = A.shape[0]
-
-    #Use KMeans on X for initial block assignments
-    #kmeans = KMeans(n_clusters=k, random_state=0).fit(X.reshape(-1, 1))
-    #z_est = kmeans.labels_
-
-    #Start with random z
-    #z_est = np.random.randint(0, k, size=n)
-
-    #Start with balanced random z
-    z_est = np.array([i for i in range(k) for _ in range(n // (k))] + \
-            [i for i in range(n % (k))])
-    np.random.shuffle(z_est)
-    
-
-    #Initialize Q and M based on initial assignments
-    Q_est = np.zeros((k, k))
-    M_est = np.zeros(k)
-    
-    for a in range(k):
-        for b in range(k):
-            Q_est[a, b] = np.mean(A[np.ix_(z_est == a, z_est == b)])
-        M_est[a] = np.mean(X[z_est == a])
-
-
-    for iteration in range(max_iter):
-        #E-Step: Update block assignments
-        z_new = np.zeros(n, dtype=int)
-        for i in range(n):
-            scores = []
-            for a in range(k):
-                #Compute likelihood
-                signal_likelihood = np.exp(-0.5 * ((X[i] - M_est[a])**2))
-                graph_likelihood = np.prod([Q_est[a, z_est[j]] if A[i,j] else (1-Q_est[a, z_est[j]]) for j in range(n) if j!=i])
-                scores.append(signal_likelihood * graph_likelihood)
-            z_new[i] = np.argmax(scores)
-
-        #M-Step: Update Q and M
-        for a in range(k):
-            for b in range(k):
-                Q_est[a, b] = np.mean(A[np.ix_(z_new == a, z_new == b)]) if A[np.ix_(z_new == a, z_new == b)].size>0 else 0
-            M_est[a] = np.mean(X[z_new == a]) if X[z_new == a].size>0 else 0
-
-        #Convergence check
-        if np.all(z_est == z_new):
-            break
-
-        z_est = z_new
-    
-    if blockoutput:
-        maparr = np.argsort(np.diagonal(Q_est))
-        mapdic = {maparr[i]:i for i in range(len(maparr))}
-        z_block = np.array([mapdic[x] for x in z_est])
-        z_est = np.sort(z_block)
-        M_est = M_est[maparr]
-        Q_est = Q_est[maparr,:]
-        Q_est = Q_est[:,maparr]
-        
-    mu_est = M_est[z_est]
-    z_mat = np.meshgrid(z_est, z_est)
-    theta_est = Q_est[z_mat] 
-    #np.fill_diagonal(theta_est,0)
-    return theta_est, mu_est, "CVEM"
-
-def VEMbasedV(A, X, K, sort=True, max_iter=100, tol=1e-6, fixed_point_iter=50):
+def VEMbasedV(A, X, K, sort=True, cluster=False, max_iter=100, tol=1e-6, fixed_point_iter=50):
     """
     Vectorized Variational EM for joint Stochastic Block Model. In this implemetation we ignore that j!=i for certain calculation.
     inputs:
@@ -165,20 +93,25 @@ def VEMbasedV(A, X, K, sort=True, max_iter=100, tol=1e-6, fixed_point_iter=50):
 
     for _ in range(max_iter):
         tau_prev = tau.copy()
-
         #E-step: Update variational parameters
-        log_pi = np.log(pi)
+        log_pi = np.log(pi+1e-10)
         log_Q = np.log(Q+1e-10)
         log_1_minus_Q = np.log(1 - Q+1e-10)
         for _ in range(fixed_point_iter):
+            tau_prevfix = tau.copy()
+
             adjacency_term = A @ (tau @ log_Q.T) + (1 - A) @ (tau @ log_1_minus_Q.T) #ignored i!=j
 
             signal_term = -0.5 * ((X[:, None] - M[None, :]) ** 2)  
 
             log_weights = log_pi + adjacency_term + signal_term  
-            log_weights -= log_weights.max(axis=1, keepdims=True) #To avoid numerical errors, the adjustement is compensated when normalizing
+            log_weights -= np.nan_to_num(log_weights.max(axis=1, keepdims=True)) #log_weights -= log_weights.max(axis=1, keepdims=True) #To avoid numerical errors, the adjustement is compensated when normalizing
             tau = np.exp(log_weights)
-            tau /= tau.sum(axis=1, keepdims=True)
+            tau /= tau.sum(axis=1, keepdims=True)+1e-10
+            if np.isnan(tau).any() or np.isinf(tau).any():
+                raise ValueError("Numerical instability in tau update")
+            if np.max(np.abs(tau - tau_prevfix)) < tol:
+                break
 
         #M-step: Update model parameters
         pi = tau.mean(axis=0)
@@ -191,6 +124,13 @@ def VEMbasedV(A, X, K, sort=True, max_iter=100, tol=1e-6, fixed_point_iter=50):
 
         if np.max(np.abs(tau - tau_prev)) < tol:
             break
+    if cluster:
+        z = np.argmax(tau, axis = 1)
+        z_1,z_2 = np.meshgrid(z, z)
+        mu = M[z]
+        theta = Q[z_1,z_2]
+        return theta, mu, "ClustVEM"
+
     if sort:
         perm = np.argsort(np.diagonal(Q))
         Q = Q[perm][:, perm]
@@ -230,7 +170,7 @@ def FANSbased(A, X):
     df = (df + df.T) / 2
 
     # Combined distance
-    lamb = 1
+    lamb = 0
     c = 1
     d = dg + lamb * df
     h = c * np.sqrt(np.log(n) / n)
@@ -264,3 +204,4 @@ def FANSbased(A, X):
             theta_hat[j, i] = theta_hat[i, j]  # Ensure symmetry
 
     return theta_hat, mu_hat, "FANS"
+
