@@ -1,61 +1,79 @@
 from .algorithms import *
 from .utility import *
 
-def benchmark_error(A, X, theta, mu, graphon, signal,method, graph_it=True):
+def benchmark_error(A, X, theta, mu, methods, graph_it=True):
     '''
     Graphs the error(s) against the amount of samples used. Used to check rates. min samplesize is 20
     '''
-    minn = 20
-    intervals = 20
+    
     N = len(X)
-    error_equiv_graphon = []
-    error_equiv_signal = []
+
+    minn = 50
+    intervals = N//2
+
     error_prob_matrix = []
     error_mean_vector = []
-
+    error_joint=[]
+    names = []
     for n in range(minn,N,intervals):
         Xn = X[:n]
         An = A[:n,:n]
         thetan = theta[:n,:n]
         mun = mu[:n]
 
-        theta_hat, mu_hat, _ = method(An, Xn)
+        errsprob = []
+        errsmean = []
+        errsjoint = []
+        for method in methods:
+            theta_hat, mu_hat, name = method(An, Xn)
+            if n==minn:
+                names.append(name)
+            errth = squared_norm_matrix(theta_hat-thetan)/(n*n)
+            errmu = squared_norm_vector(mu_hat-mun)/n
+            errsprob.append(errth)
+            errsmean.append(errmu)
+            errsjoint.append(errth+errmu)
 
-        w_matrix = blockify_graphon(graphon, n)
-        f_matrix = blockify_signal(signal, n)
-        aligned_theta_hat = align_graphon(theta_hat, w_matrix)
-        aligned_mu_hat = align_signal(mu_hat, f_matrix)
-
-        error_equiv_graphon.append(squared_norm_matrix(aligned_theta_hat-w_matrix)/(n*n))
-        error_equiv_signal.append(squared_norm_vector(aligned_mu_hat-f_matrix)/n)
-        error_prob_matrix.append(squared_norm_matrix(theta_hat-thetan)/(n*n))
-        error_mean_vector.append(squared_norm_vector(mu_hat-mun)/n)
+        error_prob_matrix.append(errsprob)
+        error_mean_vector.append(errsmean)
+        error_joint.append(errsjoint)
 
     if graph_it:
+        error_prob_matrix = np.array(error_prob_matrix)
+        error_mean_vector = np.array(error_mean_vector)
+        error_joint = np.array(error_joint)
+        print("THETA ERROR \n",error_prob_matrix)
+        print("MU ERROR \n",error_mean_vector)
+        print("JOINT ERROR \n",error_joint)
+        
         t = np.arange(minn,N,intervals)
         
-        plt.figure(figsize=(12, 6))
+        fig, axes = plt.subplots(2, 1, figsize=(12, 6), gridspec_kw={'height_ratios': [1, 1]})
 
-        plt.subplot(2, 2, 1)
-        plt.title("Graphon L2 error modulo sigma")
-        plt.plot(t,error_equiv_graphon)
+        ax1 = axes[0]
 
-        plt.subplot(2, 2, 2)
-        plt.title("Signal L2 error modulo sigma")
-        plt.plot(t,error_equiv_signal)
+        for i in range(len(methods)):
+            ax1.plot(t,error_joint[:,i], label = names[i])
+        ax1.legend()
+        ax1.set_title('Joint error')
 
-        plt.subplot(2, 2, 3)
-        plt.title("Error theta_hat-theta squared")
-        plt.plot(t,error_prob_matrix)
+        ax2 = fig.add_subplot(2, 2, 3)
+        ax3 = fig.add_subplot(2,2,4)
 
-        plt.subplot(2, 2, 4)
-        plt.title("Error mu_hat-mu squared")
-        plt.plot(t,error_mean_vector)
+        for i in range(len(methods)):
+            ax2.plot(t,error_prob_matrix[:,i], label = names[i])
+            ax3.plot(t,error_mean_vector[:,i], label = names[i])
+        ax2.legend()
+        ax2.set_title('Graphon error')
+        ax3.legend()
+        ax3.set_title('Signal error')
 
+        ax=axes.flat[1]
+        ax.set_frame_on(False)
+        ax.set_xticks([])
+        ax.set_yticks([])
 
-        plt.tight_layout()
         plt.show()
-
 
 def plot_arrays(array_pairs):
     """

@@ -283,7 +283,7 @@ def mat_vect_error(M1,v1,M2,v2):
     error = squared_norm_vector(v1-v2)/n + squared_norm_matrix(M1-M2)/(n*n)
     return error
 
-def align_graphon_signal(theta_hat,mu_hat, true_graphon, true_signal, usegraphon=False):
+def align_graphon_signal(theta_hat,mu_hat, true_graphon, true_signal, vertices=None, usegraphon=False,uselatents=False):
     '''
     This function aligns our estimates to the ground truth.
     outputs:
@@ -313,6 +313,7 @@ def align_graphon_signal(theta_hat,mu_hat, true_graphon, true_signal, usegraphon
         return mat,vect
     
     def sigmethod(mat,vect,tmat,tvect):
+        if vertices is None: return mat, vect
         perm = np.argsort(tvect)
         perm_hat = np.argsort(vect)
 
@@ -342,24 +343,20 @@ def align_graphon_signal(theta_hat,mu_hat, true_graphon, true_signal, usegraphon
         vect = vect[inverse_perm]
         return mat, vect
     
-    def antidiagmethod(mat,vect,tmat,tvect):
+    def latentmethod(mat,vect,tmat,tvect):
 
-        perm = np.argsort(np.fliplr(tmat).diagonal())
-        perm_hat = np.argsort(np.fliplr(mat).diagonal())
+        perm = np.argsort(vertices)
 
-        inverse_perm = np.argsort(perm)
-
-        mat = mat[perm_hat,:]
-        mat = mat[:,perm_hat]
-        mat = mat[inverse_perm,:]
-        mat = mat[:,inverse_perm]
-        vect = vect[perm_hat]
-        vect = vect[inverse_perm]
+        mat = mat[perm,:]
+        mat = mat[:,perm]
+        vect = vect[perm]
         return mat, vect
 
 
 
-    methods = [degreemethod,sigmethod,diagmethod,antidiagmethod]
+    if uselatents : return latentmethod(theta_hat,mu_hat,true_graphon,true_signal)
+
+    methods = [degreemethod,sigmethod,diagmethod,latentmethod]
     aligned = []
     prev = np.inf
     index = 0
@@ -378,7 +375,7 @@ def align_graphon_signal(theta_hat,mu_hat, true_graphon, true_signal, usegraphon
     print(best)
     return aligned[best]
 
-def make_diff_signal(graphon_func, initconstant = 5, diffusion_num=500, sequence=lambda n: 1.*pow(2,n),precision=300):
+def make_diff_signal(graphon_func, initconstant = 1, diffusion_num=500, sequence=lambda n: 10*n,precision=300):
     '''
     Makes a diffused signal fucntion form the input graphon:
     inputs:
@@ -403,3 +400,21 @@ def make_diff_signal(graphon_func, initconstant = 5, diffusion_num=500, sequence
     signal_func = make_step_signal(thresholds[:-1],f)
 
     return signal_func
+
+def make_dist_graphon(signal_func, g = None,dist_metric=lambda a,b: abs(a-b), inversprop=True):
+    '''
+    Makes graphon from a signal using a distance/inverse distance relation
+    '''
+    f_vect = blockify_signal(signal_func,100)
+    
+    if g is None: g = lambda x: np.cos(x)*np.cos(x)
+
+    f_1,f_2 = np.meshgrid(f_vect,f_vect)
+
+    w_mat = g(dist_metric(f_1,f_2))
+    w_mat = w_mat/np.max(w_mat)
+
+    thresholds = np.linspace(0,1,100)
+    graphon_func = make_step_graphon(thresholds[:-1], w_mat)
+
+    return graphon_func
