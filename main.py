@@ -5,7 +5,9 @@ n = 500 # Number of nodes
 k= 5
 
 w,f =random_step_graphon_signal(k,aligned=True)
-
+w = lambda x,y: np.sin(5*np.pi*(x + y - 1) + 1) /2 + 0.5
+temp = make_diff_signal(w,initconstant=10,sequence=lambda x: x)
+f = lambda x: 4+temp(x)
 
 A,X,theta,mu,xi = sample_from_graphon_signal(w,f,n)
 
@@ -17,7 +19,7 @@ method6 = lambda m,v: VEMref(m,v,int(np.sqrt(m.shape[0])))
 method7 = lambda m,v: ir_ls(m,v[:,None],int(np.sqrt(m.shape[0])))
 
 
-methods = [method7, method6, method2,method5]
+methods = [method6]#[method7, method6, method2,method5]
 
 
 f_vect = blockify_signal(f,n)
@@ -26,7 +28,7 @@ w_mat = blockify_graphon(w,n)
 pairs = [("True",f_vect,w_mat)]
 
 
-benchmark_error(A,X,theta,mu,methods)
+#benchmark_error(A,X,theta,mu,methods)
 
 for method in methods:
     theta_hat,mu_hat,name = method(A,X)
