@@ -296,8 +296,6 @@ def FANS(A, X, lamb = 0,h_quantile=0.1):
 
 
 
-
-
 def ir_ls(A, X, K, T=10, sigma=1, init_method='spectral'):
     '''
     Iterative method with least squares. Original code: https://github.com/glmbraun/CSBM
@@ -330,8 +328,8 @@ def ir_ls(A, X, K, T=10, sigma=1, init_method='spectral'):
         Sigma = np.zeros((K, K))
         for k in range(K):
             for k_prime in range(K):
-                if Q[k, k_prime] > 0:
-                    Sigma[k, k_prime] = n_k[k_prime] / Q[k, k_prime]
+                #if Q[k, k_prime] > 0:
+                Sigma[k, k_prime] = n_k[k_prime] / (Q[k, k_prime]+1e-10)
 
         # Step 3: Partition refinement
         Z_new = np.zeros_like(Z)

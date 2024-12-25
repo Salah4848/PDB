@@ -1,13 +1,12 @@
 from codefiles import *
 
 # Parameters
-n = 500 # Number of nodes
-k= 5
+n = 200 # Number of nodes
+k= 10
 
 w,f =random_step_graphon_signal(k,aligned=True)
-w = lambda x,y: np.sin(5*np.pi*(x + y - 1) + 1) /2 + 0.5
-temp = make_diff_signal(w,initconstant=10,sequence=lambda x: x)
-f = lambda x: 4+temp(x)
+f = lambda x: 2*np.cos(10*x)+16
+w = make_dist_graphon(f, g=lambda x: x/21)
 
 A,X,theta,mu,xi = sample_from_graphon_signal(w,f,n)
 
@@ -19,7 +18,7 @@ method6 = lambda m,v: VEMref(m,v,int(np.sqrt(m.shape[0])))
 method7 = lambda m,v: ir_ls(m,v[:,None],int(np.sqrt(m.shape[0])))
 
 
-methods = [method6]#[method7, method6, method2,method5]
+methods = [method6,method2] #[method7, method6, method2,method5]
 
 
 f_vect = blockify_signal(f,n)
@@ -45,3 +44,21 @@ plot_arrays(pairs)
 # 0.25*(x**2+y**2+np.sqrt(x)+np.sqrt(y)) good performance
 # np.cos(10*(x+y)) bad performance
 # no.sin(5*np.pi*(x + y - 1) + 1) /2 + 0.5
+
+
+""" n=100
+
+w_1 = lambda x,y: 0.5*(x+y)
+f_1 = lambda x: 5*x+10
+
+w_2 = lambda x,y: abs(x-y)
+f_2 = make_diff_signal(w_2,initconstant=2,sequence=lambda x: 10*x)
+
+w_3 = lambda x,y: np.sin(5*np.pi*(x + y - 1) + 1) /2 + 0.5
+temp = make_diff_signal(w_3,initconstant=2,sequence=lambda x: x)
+f_3 = lambda x: 10+temp(x)
+
+f_4 = lambda x: 2*np.cos(10*x)+16
+w_4 = make_dist_graphon(f_4, g=lambda x: x/21)
+
+funcs = [(w_1,f_1,"pair 1"),(w_2,f_2,"pair 2"),(w_3,f_3,"pair 3"),(w_4,f_4,"pair 4")] """
