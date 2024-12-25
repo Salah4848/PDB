@@ -9,7 +9,7 @@ def benchmark_error(A, X, theta, mu, methods, graph_it=True):
     N = len(X)
 
     minn = 50
-    intervals = N//2
+    intervals = N//10
 
     error_prob_matrix = []
     error_mean_vector = []

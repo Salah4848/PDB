@@ -1,12 +1,12 @@
 from codefiles import *
 
 # Parameters
-n = 200 # Number of nodes
+n = 500 # Number of nodes
 k= 10
 
 w,f =random_step_graphon_signal(k,aligned=True)
-f = lambda x: 2*np.cos(10*x)+16
-w = make_dist_graphon(f, g=lambda x: x/21)
+'''f = lambda x: 2*np.cos(10*x)+16
+w = make_dist_graphon(f, g=lambda x: x/21)'''
 
 A,X,theta,mu,xi = sample_from_graphon_signal(w,f,n)
 
@@ -14,11 +14,11 @@ method2 = lambda m,v: FANS(m,v,lamb=0)
 method3 = lambda m,v: VEMbasedV(m,v,k,sort=False,cluster=True)
 method4 = lambda m,v:  (m,v,"empirical") #empiricl esitmate
 method5 = lambda m,v: VEMICL(m,v,sort=False)
-method6 = lambda m,v: VEMref(m,v,int(np.sqrt(m.shape[0])))
-method7 = lambda m,v: ir_ls(m,v[:,None],int(np.sqrt(m.shape[0])))
+method6 = lambda m,v: VEMref(m,v,k)
+method7 = lambda m,v: ir_ls(m,v[:,None],k)
 
 
-methods = [method6,method2] #[method7, method6, method2,method5]
+methods = [method6,method7] #[method7, method6, method2,method5]
 
 
 f_vect = blockify_signal(f,n)
@@ -27,7 +27,7 @@ w_mat = blockify_graphon(w,n)
 pairs = [("True",f_vect,w_mat)]
 
 
-#benchmark_error(A,X,theta,mu,methods)
+benchmark_error(A,X,theta,mu,methods)
 
 for method in methods:
     theta_hat,mu_hat,name = method(A,X)
