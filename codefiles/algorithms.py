@@ -72,7 +72,7 @@ def VEMbased(A,X, K, max_iter=100, tol=1e-6):
     mu = blockify_signal(est_signal,n)
     return theta,mu,"VEM"
 
-def VEMbasedV(A, X, K, sort=True, cluster=False, outputall = False, max_iter=100, tol=1e-6, fixed_point_iter=100):
+def VEMbasedV(A, X, K, sort=True, cluster=False, outputall = False, giveperm = False,max_iter=100, tol=1e-6, fixed_point_iter=100):
     """
     Vectorized Variational EM for joint Stochastic Block Model. In this implemetation we ignore that j!=i for certain calculation. It is also highly numerically unstable, so must be run multiple times.
     For faster (pytorch) more proffessional code see: https://github.com/bastienlc/SBM-EM.git
@@ -130,7 +130,7 @@ def VEMbasedV(A, X, K, sort=True, cluster=False, outputall = False, max_iter=100
         z_1,z_2 = np.meshgrid(z, z)
         mu = M[z]
         theta = Q[z_1,z_2]
-        if sort:
+        if giveperm:
             perm = np.argsort(z)
             return theta,mu,"VEM",perm
         if outputall:
