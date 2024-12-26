@@ -18,7 +18,7 @@ method6 = lambda m,v: VEMref(m,v,k)
 method7 = lambda m,v: ir_ls(m,v[:,None],k)
 
 
-methods = [method6,method7] #[method7, method6, method2,method5]
+methods = [method3,method7] #[method7, method6, method2,method5]
 
 
 f_vect = blockify_signal(f,n)

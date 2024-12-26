@@ -108,7 +108,7 @@ def VEMbasedV(A, X, K, sort=True, cluster=False, outputall = False, max_iter=100
             log_weights = log_pi + adjacency_term + signal_term  
             log_weights -= log_weights.max(axis=1, keepdims=True) #To avoid numerical errors, the adjustement is compensated when normalizing
             tau = 0.8*tau + 0.2*np.exp(log_weights) #Slowing down convergence for stability
-            tau /= tau.sum(axis=1, keepdims=True)+1e-10
+            tau /= (tau.sum(axis=1, keepdims=True)+1e-10)
             if np.isnan(tau).any() or np.isinf(tau).any():
                 raise ValueError("Numerical instability in tau update")
             if np.max(np.abs(tau - tau_prevfix)) < tol:
@@ -130,6 +130,9 @@ def VEMbasedV(A, X, K, sort=True, cluster=False, outputall = False, max_iter=100
         z_1,z_2 = np.meshgrid(z, z)
         mu = M[z]
         theta = Q[z_1,z_2]
+        if sort:
+            perm = np.argsort(z)
+            return theta,mu,"VEM",perm
         if outputall:
             return Q,M,pi,z
         return theta, mu, "ClustVEM"
@@ -145,7 +148,6 @@ def VEMbasedV(A, X, K, sort=True, cluster=False, outputall = False, max_iter=100
     est_signal = make_step_signal(thresholds[:-1], M)
     theta = blockify_graphon(est_graphon, n)
     mu = blockify_signal(est_signal, n)
-
     return theta, mu, "VEM"
 
 def compute_ll(A,X,Q,M,pi,z):
@@ -216,13 +218,13 @@ def select_best_iter(A, X, method,num_iter = 10):
     
     return Q,M,pi,z 
 
-def VEMICL(A,X,sort=False):
+def VEMICL(A,X,sort=False,bound = 20):
     '''
     Uses ICL criterion to choose number of blocks
     '''
     method = lambda m,v,blocks: VEMref(m,v,blocks,outputall=True,num_iter=2)
 
-    k = select_num_blocks(A,X,method,20)
+    k = select_num_blocks(A,X,method,bound)
     print(k)
 
     if sort:

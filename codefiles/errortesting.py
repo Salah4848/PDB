@@ -102,7 +102,7 @@ def plot_arrays(array_pairs):
 
     for i, (title, _, arr_2d) in enumerate(array_pairs):
         ax = fig.add_subplot(2, num_pairs, num_pairs + i + 1)  # Second row for 2D heatmaps
-        cax = ax.imshow(arr_2d, cmap='Greys', interpolation='nearest',vmin=0,vmax=1)
+        cax = ax.imshow(arr_2d, cmap='brg', interpolation='nearest',vmin=0,vmax=1)
         ax.set_title(f'{title}')
         ax.set_xticks([])
         ax.set_yticks([])
